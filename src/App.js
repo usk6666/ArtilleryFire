@@ -68,7 +68,7 @@ function App() {
         </Box>
         <Snackbar open={open} autoHideDuration={5000} onClose={() => { setOpen(!open); }}>
           <Alert onClose={() => { setOpen(!open); }} severity={severity} sx={{ width: '100%' }}>
-            {message}
+            {severity} : {message}
           </Alert>
         </Snackbar>
         <LogUI />
