@@ -1,6 +1,6 @@
 import { TextareaAutosize } from "@mui/base";
-import { Box, Button, Checkbox, FormControl, FormControlLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, getFirestore, query, setDoc, where } from "firebase/firestore";
+import { Box, Button, Checkbox, FormControl, FormControlLabel, MenuItem, Select, TextField, Tooltip, Typography } from "@mui/material";
+import { documentId, addDoc, collection, deleteDoc, doc, getDoc, getDocs, getFirestore, query, setDoc, where } from "firebase/firestore";
 import { useState } from "react";
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from "react-syntax-highlighter/dist/esm/styles/hljs";
@@ -14,7 +14,7 @@ function CloudFirestoreUI({ addLog }) {
   const [condition, setCondition] = useState(localStorage.getItem("artillery_firestore_condition") ? localStorage.getItem("artillery_firestore_condition") : "==");
   const [type, setType] = useState(localStorage.getItem("artillery_firestore_type") ? localStorage.getItem("artillery_firestore_type") : "string");
   const [path, setPath] = useState(localStorage.getItem("artillery_firestore_path") ? localStorage.getItem("artillery_firestore_path") : "");
-  const [documentId, setDocumentId] = useState(localStorage.getItem("artillery_firestore_documentId") ? localStorage.getItem("artillery_firestore_documentId") : "");
+  const [docId, setDocId] = useState(localStorage.getItem("artillery_firestore_docId") ? localStorage.getItem("artillery_firestore_docId") : "");
   const [inputData, setInputData] = useState(localStorage.getItem("artillery_firestore_inputData") ? localStorage.getItem("artillery_firestore_inputData") : "");
   const [outputData, setOutputData] = useState(localStorage.getItem("artillery_firestore_outputData") ? localStorage.getItem("artillery_firestore_outputData") : "");
   const [field, setField] = useState(localStorage.getItem("artillery_firestore_field") ? localStorage.getItem("artillery_firestore_field") : "");
@@ -55,18 +55,18 @@ function CloudFirestoreUI({ addLog }) {
 
     switch (action) {
       case "get":
-        if (!documentId || !path) {
+        if (!docId || !path) {
           alert("'Get' operation is require 'Collection name / Path' and 'Document ID'.");
           return;
         }
-        const docRef = doc(firestore, path, documentId);
-        op = `Get (getDoc): {"path": "${path}", "docId": "${documentId}"}`;
+        const docRef = doc(firestore, path, docId);
+        op = `Get (getDoc): {"path": "${path}", "docId": "${docId}"}`;
         getDoc(docRef)
           .then((snapshot) => {
             const document_id = snapshot.id;
             const data = snapshot.data();
             if (!data) {
-              _addLog(RESULT_ERROR, op, `Document ID: ${documentId} not found.`)
+              _addLog(RESULT_ERROR, op, `Document ID: ${docId} not found.`)
             } else {
               const dd = { document_id, data }
               _addLog(RESULT_SUCCESS, op, JSON.stringify(dd, null, 4));
@@ -102,7 +102,11 @@ function CloudFirestoreUI({ addLog }) {
           if (condition === "in" || condition === "not-in") {
             v = [v];
           }
-          q = query(collection(firestore, path), where(field, condition, v));
+          if (field === "documentId()") {
+            q = query(collection(firestore, path), where(documentId(), condition, v));
+          } else {
+            q = query(collection(firestore, path), where(field, condition, v));
+          }
         } else {
           op = `List (getDocs): {"path": "${path}"}`;
           q = query(collection(firestore, path));
@@ -139,14 +143,14 @@ function CloudFirestoreUI({ addLog }) {
           });
         break;
       case "update":
-        if (!documentId || !path) {
+        if (!docId || !path) {
           alert("'Create/Update' operation is require 'Collection name / Path' and 'Document ID'.");
           return;
         }
-        op = `Create/Update (setDoc): {"path": "${path}", "docId": "${documentId}"}`;
-        setDoc(doc(firestore, path, documentId), insecure_eval())
-          .then((docRef) => {
-            _addLog(RESULT_SUCCESS, op, JSON.stringify(docRef, null, 4));
+        op = `Create/Update (setDoc): {"path": "${path}", "docId": "${docId}"}`;
+        setDoc(doc(firestore, path, docId), insecure_eval())
+          .then(() => {
+            _addLog(RESULT_SUCCESS, op, `Successfully updated:\n${JSON.stringify({"path": path, "docId": docId}, null, 4)}`);
           })
           .catch((e) => {
             _addLog(RESULT_ERROR, op, String(e));
@@ -154,14 +158,14 @@ function CloudFirestoreUI({ addLog }) {
           });
         break;
       case "delete":
-        if (!documentId || !path) {
+        if (!docId || !path) {
           alert("'Delete' operation is require 'Collection name / Path' and 'Document ID'.");
           return;
         }
-        op = `Delete (deleteDoc): {"path": "${path}", "docId": "${documentId}"}`;
-        deleteDoc(doc(firestore, path, documentId))
-          .then((docRef) => {
-            _addLog(RESULT_SUCCESS, op, JSON.stringify(docRef, null, 4));
+        op = `Delete (deleteDoc): {"path": "${path}", "docId": "${docId}"}`;
+        deleteDoc(doc(firestore, path, docId))
+          .then(() => {
+            _addLog(RESULT_SUCCESS, op, `Successfully deleted:\n${JSON.stringify({"path": path, "docId": docId}, null, 4)}`);
           })
           .catch((e) => {
             _addLog(RESULT_ERROR, op, String(e));
@@ -187,13 +191,15 @@ function CloudFirestoreUI({ addLog }) {
       </FormControl>
       <Button sx={{ mt: 1 }} variant="contained" onClick={executeQuery}>Execute</Button>
       <TextField sx={{ mb: 1 }} defaultValue={path} fullWidth label="Collection name / Path" onChange={(event) => { localStorage.setItem("artillery_firestore_path", event.target.value); setPath(event.target.value) }} />
-      {!(action in { create: "create", list: "list" }) && <TextField sx={{ mb: 1, mr: 1 }} label="Document ID" defaultValue={documentId} onChange={(event) => { localStorage.setItem("artillery_firestore_documentId", event.target.value); setDocumentId(event.target.value) }} />}
+      {!(action in { create: "create", list: "list" }) && <TextField sx={{ mb: 1, mr: 1 }} label="Document ID" defaultValue={docId} onChange={(event) => { localStorage.setItem("artillery_firestore_docId", event.target.value); setDocId(event.target.value) }} />}
       {action === "list" &&
         <div>
           <FormControlLabel control={<><FormControl><Checkbox value={enableFilter} onChange={(event) => { localStorage.setItem("artillery_firestore_enableFilter", String(event.target.checked)); setEnableFilter(event.target.checked) }} /></FormControl></>} label="Enable Filter" />
-          <TextField label="Field" defaultValue={field} onChange={(event) => { localStorage.setItem("artillery_firestore_field", event.target.value); setField(event.target.value) }} />
+          <Tooltip title="If you want to specify by DocumentID, please specify 'documentId()'">
+            <TextField sx={{ mr: 1 }} label="Field" defaultValue={field} onChange={(event) => { localStorage.setItem("artillery_firestore_field", event.target.value); setField(event.target.value) }} />
+          </Tooltip>
           <FormControl>
-            <Select label="condition" value={condition} onChange={(event) => { localStorage.setItem("artillery_firestore_condition", event.target.value); setCondition(event.target.value); }}>
+            <Select sx={{ mr: 1 }} label="condition" value={condition} onChange={(event) => { localStorage.setItem("artillery_firestore_condition", event.target.value); setCondition(event.target.value); }}>
               <MenuItem value="==">==</MenuItem>
               <MenuItem value="!=">!=</MenuItem>
               <MenuItem value=">">&gt;</MenuItem>
@@ -206,9 +212,9 @@ function CloudFirestoreUI({ addLog }) {
               <MenuItem value="not-array-contains">not-array-contains</MenuItem>
             </Select>
           </FormControl>
-          <TextField label="Value" defaultValue={value} onChange={(event) => { localStorage.setItem("artillery_firestore_value", event.target.value); setValue(event.target.value) }} />
+          <TextField sx={{ mr: 1 }} label="Value" defaultValue={value} onChange={(event) => { localStorage.setItem("artillery_firestore_value", event.target.value); setValue(event.target.value) }} />
           <FormControl>
-            <Select label="Value type" value={type} onChange={(event) => { localStorage.setItem("artillery_firestore_type", event.target.value); setType(event.target.value) }} >
+            <Select sx={{ mr: 1 }} label="Value type" value={type} onChange={(event) => { localStorage.setItem("artillery_firestore_type", event.target.value); setType(event.target.value) }} >
               <MenuItem value="string">String</MenuItem>
               <MenuItem value="number">Number</MenuItem>
               <MenuItem value="boolean">Boolean</MenuItem>
