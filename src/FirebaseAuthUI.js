@@ -31,25 +31,26 @@ function FirebaseAuthUI({ addLog }) {
     addLog(getCurrentDatetime(), AUTHENTICATION_NAME, result, operation, detail);
   }
 
-  function reAuth() {
+  async function reAuth() {
 
     const user = getAuth().currentUser;
     if (user) {
-      if (user.providerId === "password") {
+      let isProviderPassword = false;
+      user.providerData.forEach((data) => {
+        if (data.providerId === "password") {
+          isProviderPassword = true;
+        }
+      });
+      if (isProviderPassword) {
         const credential = EmailAuthProvider.credential(user.email, password);
-        reauthenticateWithCredential(user, credential)
-          .then(() => {
-            console.log("re-authenticated.");
-            return true;
-          })
-          .catch((e) => {
-            _addLog(RESULT_ERROR, "Re-authentication", `Failed to auto reauthenticate with following error.\n\n${String(e)}`);
-            return false;
-          })
+        try {
+          await reauthenticateWithCredential(user, credential)
+        } catch (e) {
+          throw e;
+        }
       }
-      return true;
     } else {
-      return false;
+      throw new Error("unauthenticated.");
     }
   }
 
@@ -250,8 +251,9 @@ function FirebaseAuthUI({ addLog }) {
     const user = getAuth().currentUser;
     const old = user.email;
     if (user) {
-      if (reAuth()) {
-        updateEmail(user, newEmail)
+      reAuth()
+        .then(() => {
+          updateEmail(getAuth().currentUser, newEmail)
           .then(() => {
             _addLog(RESULT_SUCCESS, "Update Email (updateEmail)", `Email updated. (${old} => ${newEmail})`)
           })
@@ -259,7 +261,11 @@ function FirebaseAuthUI({ addLog }) {
             _addLog(RESULT_ERROR, "Update Email (updateEmail)", `Failed to update email with following error:\n\n${String(e)}`);
             console.log(e);
           })
-      }
+        })
+        .catch((e) => {
+          _addLog(RESULT_ERROR, "Update Email (updateEmail)", `Failed to update email with following error:\n\n${String(e)}`);
+          console.log(e);
+        })
     } else {
       alert("unauthenticated.");
     }
@@ -269,8 +275,9 @@ function FirebaseAuthUI({ addLog }) {
 
     const user = getAuth().currentUser;
     if (user) {
-      if (reAuth()) {
-        updatePassword(user, newPassword)
+      reAuth()
+        .then(() => {
+          updatePassword(getAuth().currentUser, newPassword)
           .then(() => {
             _addLog(RESULT_SUCCESS, "Update Password (updatePassword)", `Password updated. (User: ${user.email})`)
           })
@@ -278,7 +285,11 @@ function FirebaseAuthUI({ addLog }) {
             _addLog(RESULT_ERROR, "Update Password (updatePassword)", `Failed to update password with following error:\n\n${String(e)}`);
             console.log(e);
           })
-      }
+        })
+        .catch((e) => {
+          _addLog(RESULT_ERROR, "Update Password (updatePassword)", `Failed to update password with following error:\n\n${String(e)}`);
+          console.log(e);
+        })
     } else {
       alert("unauthenticated.");
     }
@@ -309,8 +320,9 @@ function FirebaseAuthUI({ addLog }) {
       if (!window.confirm("Are you sure you want to delete your account?")) {
         return;
       }
-      if (reAuth()) {
-        user.delete()
+      reAuth()
+        .then(() => {
+          getAuth().currentUser.delete()
           .then(() => {
             _addLog(RESULT_SUCCESS, "Delete Account (user.delete)", `Account deleted. (${user.email})`);
           })
@@ -318,7 +330,11 @@ function FirebaseAuthUI({ addLog }) {
             _addLog(RESULT_ERROR, "Delete Account (user.delete)", `Failed to delete account with following error:\n\n${String(e)}`);
             console.log(e);
           })
-      }
+        })
+        .catch((e) => {
+          _addLog(RESULT_ERROR, "Delete Account (user.delete)", `Failed to delete account with following error:\n\n${String(e)}`);
+          console.log(e);
+        })
     } else {
       alert("unauthenticated.");
     }
