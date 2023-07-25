@@ -26,12 +26,10 @@ function App() {
     const _auth = getAuth(_app);
 
     setPersistence(_auth, browserLocalPersistence)
-      .then(() => {
-        console.log("persistence is set to browserLocalPersistence.")
-      })
+      .then(() => {});
     _auth.onAuthStateChanged((user) => {
       setUser(user);
-    })
+    });
   }
 
   function selectPage(page) {
