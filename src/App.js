@@ -11,6 +11,18 @@ import LogUI from "./LogUI";
 import TopPage from "./TopPage";
 import { getLogs } from "./Utils";
 
+import * as firebaseApp from "firebase/app";
+import * as firebaseAuth from "firebase/auth";
+import * as cloudFirestore from "firebase/firestore";
+import * as cloudFunctions from "firebase/functions";
+import * as cloudStorage from "firebase/storage";
+
+global.firebaseApp = firebaseApp;
+global.firebaseAuth = firebaseAuth;
+global.cloudFirestore = cloudFirestore;
+global.cloudStorage = cloudStorage;
+global.cloudFunctions = cloudFunctions;
+
 function App() {
 
   const [page, setPage] = useState("top");
