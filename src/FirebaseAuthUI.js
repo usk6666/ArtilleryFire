@@ -1,7 +1,7 @@
 import { Refresh } from "@mui/icons-material";
 import { TabContext, TabList, TabPanel } from "@mui/lab";
 import { Box, Button, Card, CardActions, CardContent, CardHeader, Divider, MenuItem, Select, Tab, TextField, Typography } from "@mui/material";
-import { EmailAuthProvider, FacebookAuthProvider, GithubAuthProvider, GoogleAuthProvider, OAuthProvider, TwitterAuthProvider, applyActionCode, createUserWithEmailAndPassword, getAuth, getIdTokenResult, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signOut, updateEmail, updatePassword, updateProfile } from "firebase/auth";
+import { EmailAuthProvider, FacebookAuthProvider, GithubAuthProvider, GoogleAuthProvider, OAuthProvider, TwitterAuthProvider, applyActionCode, createUserWithEmailAndPassword, getAuth, getIdTokenResult, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInAnonymously, signInWithCustomToken, signInWithEmailAndPassword, signInWithPopup, signOut, updateEmail, updatePassword, updateProfile } from "firebase/auth";
 import { useState } from "react";
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from "react-syntax-highlighter/dist/esm/styles/hljs";
@@ -11,6 +11,7 @@ import { getCurrentDatetime } from "./Utils";
 function FirebaseAuthUI({ addLog }) {
 
   const [provider, setProvider] = useState("password");
+  const [customToken, setCustomToken] = useState("");
   const [email, setEmail] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -132,11 +133,26 @@ function FirebaseAuthUI({ addLog }) {
       })
   }
 
+  function signInWithCustomTokenAuth() {
+
+    signInWithCustomToken(getAuth(), customToken)
+      .then(() => {
+        _addLog(RESULT_SUCCESS, "Sign In (signInWithCustomToken)", "Successfully signed in with custom token.");
+      })
+      .catch((e) => {
+        _addLog(RESULT_ERROR, "Sign In (signInWithCustomToken)", `Signin failed with the following error:\n\n${String(e)}`);
+        console.log(e);
+      })
+  }
+
   function signIn() {
 
     switch (provider) {
       case "password":
         signInWithEmailPassword();
+        break;
+      case "custom_token":
+        signInWithCustomTokenAuth();
         break;
       case "anonymous":
         signInWithAnonymous();
@@ -357,6 +373,7 @@ function FirebaseAuthUI({ addLog }) {
             <Typography variant="h5">Auth Provider</Typography>
             <Select sx={{ mr: 1, mt: 1 }} autoWidth label="Provider" variant="standard" value={provider} onChange={(event) => { setProvider(event.target.value); }}>
               <MenuItem value="password">Email/Password</MenuItem>
+              <MenuItem value="custom_token">Custom Token</MenuItem>
               <MenuItem value="anonymous">Anonymous</MenuItem>
               <MenuItem value="google">Google</MenuItem>
               <MenuItem value="facebook">Facebook</MenuItem>
@@ -373,6 +390,9 @@ function FirebaseAuthUI({ addLog }) {
                     <TextField label="E-mail" variant="standard" sx={{ mr: 1, mt: 1, width: "50%" }} defaultValue={email} onChange={(event) => setEmail(event.target.value)} />
                     <TextField label="Password" variant="standard" sx={{ mr: 1, mt: 1, width: "50%" }} type="password" defaultValue={password} onChange={(event) => setPassword(event.target.value)} />
                   </>
+                }
+                {provider === "custom_token" &&
+                  <TextField label="Custom Token" variant="standard" sx={{ mr: 1, mt: 1, width: "50%" }} defaultValue={customToken} onChange={(event) => setCustomToken(event.target.value)} />
                 }
               </CardContent>
               <CardActions>
