@@ -19,7 +19,7 @@ Since the author developed it while learning React, it is not a beautiful code, 
 ## Installation
 
 - Requirements
-  - node.js ver 19
+  - node.js ver 24
 
 ```sh
 git clone https://github.com/usk6666/ArtilleryFire.git

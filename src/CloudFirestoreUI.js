@@ -1,6 +1,6 @@
 import { TextareaAutosize } from "@mui/base";
 import { Box, Button, Checkbox, FormControl, FormControlLabel, MenuItem, Select, TextField, Tooltip, Typography } from "@mui/material";
-import { documentId, addDoc, collection, deleteDoc, doc, getDoc, getDocs, getFirestore, query, setDoc, where } from "firebase/firestore";
+import { documentId, addDoc, collection, deleteDoc, doc, getDoc, getDocs, getFirestore, query, setDoc, where, limit, orderBy, startAfter } from "firebase/firestore";
 import { useState } from "react";
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from "react-syntax-highlighter/dist/esm/styles/hljs";
@@ -19,6 +19,9 @@ function CloudFirestoreUI({ addLog }) {
   const [outputData, setOutputData] = useState(localStorage.getItem("artillery_firestore_outputData") ? localStorage.getItem("artillery_firestore_outputData") : "");
   const [field, setField] = useState(localStorage.getItem("artillery_firestore_field") ? localStorage.getItem("artillery_firestore_field") : "");
   const [value, setValue] = useState(localStorage.getItem("artillery_firestore_value") ? localStorage.getItem("artillery_firestore_value") : "");
+  const [pageSize, setPageSize] = useState(localStorage.getItem("artillery_firestore_pageSize") ? parseInt(localStorage.getItem("artillery_firestore_pageSize")) : 100);
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasNextPage, setHasNextPage] = useState(false);
 
   function storeOutputData(data) {
 
@@ -45,6 +48,70 @@ function CloudFirestoreUI({ addLog }) {
       alert("Please enter a valid JSON object.");
     }
     return _data;
+  }
+
+  function loadNextPage() {
+    if (!lastDoc || !path) {
+      alert("No more pages to load or path not set.");
+      return;
+    }
+
+    const firestore = getFirestore();
+    let q;
+    let op;
+
+    if (enableFilter) {
+      op = `List Next Page (getDocs): {"path": "${path}", "field": "${field}", "condition": "${condition}", "value": "${value}", "limit": ${pageSize}}`;
+      let v;
+      switch (type) {
+        case "string":
+          v = String(value);
+          break;
+        case "number":
+          v = Number(value);
+          break;
+        case "boolean":
+          v = Boolean(value);
+          break;
+        default:
+          v = String(value);
+      }
+      if (condition === "in" || condition === "not-in") {
+        v = [v];
+      }
+      if (field === "documentId()") {
+        q = query(collection(firestore, path), where(documentId(), condition, v), orderBy(documentId()), startAfter(lastDoc), limit(pageSize));
+      } else {
+        q = query(collection(firestore, path), where(field, condition, v), orderBy(field), startAfter(lastDoc), limit(pageSize));
+      }
+    } else {
+      op = `List Next Page (getDocs): {"path": "${path}", "limit": ${pageSize}}`;
+      q = query(collection(firestore, path), startAfter(lastDoc), limit(pageSize));
+    }
+
+    getDocs(q)
+      .then((snapshot) => {
+        let d = [];
+        snapshot.forEach((doc) => {
+          const document_id = doc.id;
+          const data = doc.data();
+          const dd = { document_id, data }
+          d.push(dd);
+        })
+        
+        // Set last document for pagination
+        if (snapshot.docs.length > 0) {
+          setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        }
+        setHasNextPage(snapshot.docs.length === pageSize);
+        
+        const resultMessage = `Retrieved ${d.length} documents${snapshot.docs.length === pageSize ? ' (may have more)' : ' (end of results)'}\n\n${JSON.stringify(d, null, 4)}`;
+        _addLog(RESULT_SUCCESS, op, resultMessage);
+      })
+      .catch((e) => {
+        _addLog(RESULT_ERROR, op, String(e));
+        console.log(e);
+      });
   }
 
 
@@ -84,7 +151,7 @@ function CloudFirestoreUI({ addLog }) {
         }
         let q;
         if (enableFilter) {
-          op = `List (getDocs): {"path": "${path}", "field": "${field}", "condition": "${condition}", "value": "${value}"}`;
+          op = `List (getDocs): {"path": "${path}", "field": "${field}", "condition": "${condition}", "value": "${value}", "limit": ${pageSize}}`;
           let v;
           switch (type) {
             case "string":
@@ -103,13 +170,13 @@ function CloudFirestoreUI({ addLog }) {
             v = [v];
           }
           if (field === "documentId()") {
-            q = query(collection(firestore, path), where(documentId(), condition, v));
+            q = query(collection(firestore, path), where(documentId(), condition, v), orderBy(documentId()), limit(pageSize));
           } else {
-            q = query(collection(firestore, path), where(field, condition, v));
+            q = query(collection(firestore, path), where(field, condition, v), orderBy(field), limit(pageSize));
           }
         } else {
-          op = `List (getDocs): {"path": "${path}"}`;
-          q = query(collection(firestore, path));
+          op = `List (getDocs): {"path": "${path}", "limit": ${pageSize}}`;
+          q = query(collection(firestore, path), limit(pageSize));
         }
         getDocs(q)
           .then((snapshot) => {
@@ -120,7 +187,15 @@ function CloudFirestoreUI({ addLog }) {
               const dd = { document_id, data }
               d.push(dd);
             })
-            _addLog(RESULT_SUCCESS, op, JSON.stringify(d, null, 4));
+            
+            // Set last document for pagination
+            if (snapshot.docs.length > 0) {
+              setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+            }
+            setHasNextPage(snapshot.docs.length === pageSize);
+            
+            const resultMessage = `Retrieved ${d.length} documents${snapshot.docs.length === pageSize ? ' (may have more)' : ' (end of results)'}\n\n${JSON.stringify(d, null, 4)}`;
+            _addLog(RESULT_SUCCESS, op, resultMessage);
           })
           .catch((e) => {
             _addLog(RESULT_ERROR, op, String(e));
@@ -191,7 +266,25 @@ function CloudFirestoreUI({ addLog }) {
       </FormControl>
       <Button sx={{ mt: 1 }} variant="contained" onClick={executeQuery}>Execute</Button>
       <TextField sx={{ mb: 1 }} defaultValue={path} fullWidth label="Collection name / Path" onChange={(event) => { localStorage.setItem("artillery_firestore_path", event.target.value); setPath(event.target.value) }} />
+      {action === "list" && (
+        <TextField 
+          sx={{ mb: 1 }} 
+          type="number"
+          label="Page Size (max items per query)" 
+          value={pageSize}
+          onChange={(event) => { 
+            const newSize = parseInt(event.target.value) || 100;
+            localStorage.setItem("artillery_firestore_pageSize", String(newSize)); 
+            setPageSize(newSize);
+          }} 
+        />
+      )}
       {!(action in { create: "create", list: "list" }) && <TextField sx={{ mb: 1, mr: 1 }} label="Document ID" defaultValue={docId} onChange={(event) => { localStorage.setItem("artillery_firestore_docId", event.target.value); setDocId(event.target.value) }} />}
+      {action === "list" && hasNextPage && (
+        <Button sx={{ mb: 1, ml: 1 }} variant="outlined" onClick={loadNextPage}>
+          Load Next Page
+        </Button>
+      )}
       {action === "list" &&
         <div>
           <FormControlLabel control={<><FormControl><Checkbox value={enableFilter} onChange={(event) => { localStorage.setItem("artillery_firestore_enableFilter", String(event.target.checked)); setEnableFilter(event.target.checked) }} /></FormControl></>} label="Enable Filter" />
@@ -228,7 +321,9 @@ function CloudFirestoreUI({ addLog }) {
       }
       <Box sx={{ mt: 1 }}>
         <Typography variant="h5" sx={{ mb: 1 }}>Output</Typography>
-        <SyntaxHighlighter language="json" style={googlecode}>{outputData}</SyntaxHighlighter>
+        <Box sx={{ maxHeight: '600px', overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+          <SyntaxHighlighter language="json" style={googlecode}>{outputData}</SyntaxHighlighter>
+        </Box>
       </Box>
     </div>
   )
